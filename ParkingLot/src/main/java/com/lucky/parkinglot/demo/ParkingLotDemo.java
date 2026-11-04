@@ -49,7 +49,7 @@ public class ParkingLotDemo {
 
         Gate entryGate = gateRepository.save(new Gate("Entry-1", GateType.ENTRY));
         Gate exitGate = gateRepository.save(new Gate("Exit-1", GateType.EXIT));
-        Employee employee = employeeRepository.save(new Employee("Asha", "9000000000", entryGate));
+        Employee employee = employeeRepository.save(new Employee("Aashi", "9000000000", entryGate));
         parkingLotRepository.save(new ParkingLot("City Centre", List.of(ground), List.of(entryGate),
                 List.of(exitGate), List.of(employee)));
 
