@@ -147,12 +147,13 @@ Parking Lot system with which customer can park their vehicle.
 classDiagram
     direction TB
 
-    Payment <<interface>>
-    PaymentGateway <<interface>>
-    PricingStrategy <<interface>>
-    SpotAssignment <<interface>>
-    StripePaymentGateway <<external>>
-    RazorpayPaymentGateway <<external>>
+    class Payment <<interface>>
+    class PaymentGateway <<interface>>
+    class PricingStrategy <<interface>>
+    class SpotAssignment <<interface>>
+    
+    class StripePaymentGateway <<external>>
+    class RazorpayPaymentGateway <<external>>
 
     ParkingLot "1" *-- "2..*" Gate
     ParkingLot "1" *-- "1..*" Floor
