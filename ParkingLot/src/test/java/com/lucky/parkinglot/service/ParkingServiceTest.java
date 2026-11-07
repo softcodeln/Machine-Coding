@@ -8,6 +8,7 @@ import com.lucky.parkinglot.exception.ActiveTicketExistsException;
 import com.lucky.parkinglot.exception.NoSpotAvailableException;
 import com.lucky.parkinglot.exception.TicketNotFoundException;
 import com.lucky.parkinglot.model.Customer;
+import com.lucky.parkinglot.model.Employee;
 import com.lucky.parkinglot.model.Floor;
 import com.lucky.parkinglot.model.Gate;
 import com.lucky.parkinglot.model.Spot;
@@ -52,6 +53,8 @@ class ParkingServiceTest {
     private final Customer customer = new Customer("Ravi");
     private final Gate entryGate = new Gate("Entry-1", GateType.ENTRY);
     private final Gate exitGate = new Gate("Exit-1", GateType.EXIT);
+    private final Employee entryEmployee = new Employee("Aashi", "9000000000", entryGate);
+    private final Employee exitEmployee = new Employee("Rohan", "9000000001", exitGate);
     private final Vehicle car = new Vehicle("CAR-1", VehicleType.CAR);
 
     private final FloorRepository floorRepository = new FloorRepository();
@@ -80,7 +83,7 @@ class ParkingServiceTest {
 
     @Test
     void entryAssignsNearestSpotOfMatchingTypeAndGeneratesActiveTicket() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
 
         assertThat(ticket.getId()).isNotNull();
         assertThat(ticket.getSpot()).isSameAs(carSpot1);
@@ -99,22 +102,23 @@ class ParkingServiceTest {
         spotRepository.save(second.addSpot("S-1", VehicleType.CAR));
         Spot firstFloorSpot = spotRepository.save(first.addSpot("F-1", VehicleType.CAR));
 
-        assertThat(newService(spotRepository).parkVehicle(car, customer, entryGate).getSpot())
+        assertThat(newService(spotRepository).parkVehicle(car, customer, entryGate, entryEmployee).getSpot())
                 .isSameAs(firstFloorSpot);
     }
 
     @Test
     void entryIsRejectedAtExitGate() {
-        assertThatThrownBy(() -> service.parkVehicle(car, customer, exitGate))
+        assertThatThrownBy(() -> service.parkVehicle(car, customer, exitGate, entryEmployee))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.FREE);
     }
 
     @Test
     void noMatchingSpotMeansNoTicket() {
-        service.parkVehicle(new Vehicle("BIKE-1", VehicleType.BIKE), customer, entryGate);
+        service.parkVehicle(new Vehicle("BIKE-1", VehicleType.BIKE), customer, entryGate, entryEmployee);
 
-        assertThatThrownBy(() -> service.parkVehicle(new Vehicle("BIKE-2", VehicleType.BIKE), customer, entryGate))
+        assertThatThrownBy(() -> service.parkVehicle(new Vehicle("BIKE-2", VehicleType.BIKE), customer, entryGate,
+                entryEmployee))
                 .isInstanceOf(NoSpotAvailableException.class);
         assertThatThrownBy(() -> service.findActiveTicket("BIKE-2")).isInstanceOf(TicketNotFoundException.class);
         assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.FREE);
@@ -124,12 +128,12 @@ class ParkingServiceTest {
     void spotUnderMaintenanceIsNeverAssigned() {
         assertThat(carSpot1.startMaintenance()).isTrue();
 
-        assertThat(service.parkVehicle(car, customer, entryGate).getSpot()).isSameAs(carSpot2);
+        assertThat(service.parkVehicle(car, customer, entryGate, entryEmployee).getSpot()).isSameAs(carSpot2);
     }
 
     @Test
     void occupiedSpotCannotGoIntoMaintenance() {
-        service.parkVehicle(car, customer, entryGate);
+        service.parkVehicle(car, customer, entryGate, entryEmployee);
 
         assertThat(carSpot1.startMaintenance()).isFalse();
         assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.OCCUPIED);
@@ -137,19 +141,19 @@ class ParkingServiceTest {
 
     @Test
     void vehicleCannotHoldTwoActiveTickets() {
-        service.parkVehicle(car, customer, entryGate);
+        service.parkVehicle(car, customer, entryGate, entryEmployee);
 
-        assertThatThrownBy(() -> service.parkVehicle(car, customer, entryGate))
+        assertThatThrownBy(() -> service.parkVehicle(car, customer, entryGate, entryEmployee))
                 .isInstanceOf(ActiveTicketExistsException.class);
         assertThat(carSpot2.getStatus()).isEqualTo(SpotStatus.FREE);
     }
 
     @Test
     void successfulExitChargesRoundedUpHoursAndFreesSpot() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
         clock.advance(Duration.ofMinutes(61));
 
-        assertThat(service.exitVehicle(ticket, PAYMENT_OK)).isTrue();
+        assertThat(service.exitVehicle(ticket, PAYMENT_OK, exitEmployee)).isTrue();
 
         assertThat(ticket.getAmount()).isEqualTo(2 * CAR_RATE);
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.PAID);
@@ -161,37 +165,37 @@ class ParkingServiceTest {
     @Test
     void exactHoursAreNotRoundedUpAndRatesDependOnVehicleType() {
         Vehicle bike = new Vehicle("BIKE-1", VehicleType.BIKE);
-        Ticket ticket = service.parkVehicle(bike, customer, entryGate);
+        Ticket ticket = service.parkVehicle(bike, customer, entryGate, entryEmployee);
         clock.advance(Duration.ofHours(3));
 
-        service.exitVehicle(ticket, PAYMENT_OK);
+        service.exitVehicle(ticket, PAYMENT_OK, exitEmployee);
 
         assertThat(ticket.getAmount()).isEqualTo(3 * BIKE_RATE);
     }
 
     @Test
     void oneSecondOverAnHourIsChargedAsNextHour() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
         clock.advance(Duration.ofHours(1).plusSeconds(1));
 
-        service.exitVehicle(ticket, PAYMENT_OK);
+        service.exitVehicle(ticket, PAYMENT_OK, exitEmployee);
 
         assertThat(ticket.getAmount()).isEqualTo(2 * CAR_RATE);
     }
 
     @Test
     void failedPaymentKeepsTicketActiveAndSpotOccupiedUntilRetrySucceeds() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
         clock.advance(Duration.ofMinutes(30));
 
-        assertThat(service.exitVehicle(ticket, PAYMENT_FAILS)).isFalse();
+        assertThat(service.exitVehicle(ticket, PAYMENT_FAILS, exitEmployee)).isFalse();
 
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.ACTIVE);
         assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.OCCUPIED);
         assertThat(service.findActiveTicket(car.getNumber())).isSameAs(ticket);
 
         clock.advance(Duration.ofHours(1));
-        assertThat(service.exitVehicle(ticket, PAYMENT_OK)).isTrue();
+        assertThat(service.exitVehicle(ticket, PAYMENT_OK, exitEmployee)).isTrue();
 
         assertThat(ticket.getAmount()).isEqualTo(2 * CAR_RATE);
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.PAID);
@@ -200,17 +204,17 @@ class ParkingServiceTest {
 
     @Test
     void paidTicketCannotBeUsedAgain() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
-        service.exitVehicle(ticket, PAYMENT_OK);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
+        service.exitVehicle(ticket, PAYMENT_OK, exitEmployee);
 
-        assertThatThrownBy(() -> service.exitVehicle(ticket, PAYMENT_OK)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> service.exitVehicle(ticket, PAYMENT_OK, exitEmployee)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void vehicleCanParkAgainAfterExit() {
-        service.exitVehicle(service.parkVehicle(car, customer, entryGate), PAYMENT_OK);
+        service.exitVehicle(service.parkVehicle(car, customer, entryGate, entryEmployee), PAYMENT_OK, exitEmployee);
 
-        Ticket second = service.parkVehicle(car, customer, entryGate);
+        Ticket second = service.parkVehicle(car, customer, entryGate, entryEmployee);
 
         assertThat(second.getStatus()).isEqualTo(TicketStatus.ACTIVE);
         assertThat(second.getSpot()).isSameAs(carSpot1);
@@ -218,20 +222,65 @@ class ParkingServiceTest {
 
     @Test
     void lostTicketIsFoundByVehicleNumberAndChargedPenalty() {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
         clock.advance(Duration.ofMinutes(10));
 
-        assertThat(service.exitVehicleWithLostTicket(car.getNumber(), PAYMENT_OK)).isTrue();
+        assertThat(service.exitVehicleWithLostTicket(car.getNumber(), PAYMENT_OK, exitEmployee)).isTrue();
 
         assertThat(ticket.getAmount()).isEqualTo(CAR_RATE + PENALTY);
+        assertThat(ticket.getSettledBy()).isSameAs(exitEmployee);
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.PAID);
         assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.FREE);
     }
 
     @Test
     void lostTicketForUnknownVehicleIsRejected() {
-        assertThatThrownBy(() -> service.exitVehicleWithLostTicket("NOPE", PAYMENT_OK))
+        assertThatThrownBy(() -> service.exitVehicleWithLostTicket("NOPE", PAYMENT_OK, exitEmployee))
                 .isInstanceOf(TicketNotFoundException.class);
+    }
+
+    @Test
+    void ticketRecordsIssuingEmployeeAndSettlingEmployeeOnlyAfterPayment() {
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
+
+        assertThat(ticket.getIssuedBy()).isSameAs(entryEmployee);
+        assertThat(ticket.getSettledBy()).isNull();
+
+        service.exitVehicle(ticket, PAYMENT_FAILS, exitEmployee);
+        assertThat(ticket.getSettledBy()).isNull();
+
+        service.exitVehicle(ticket, PAYMENT_OK, exitEmployee);
+        assertThat(ticket.getIssuedBy()).isSameAs(entryEmployee);
+        assertThat(ticket.getSettledBy()).isSameAs(exitEmployee);
+    }
+
+    @Test
+    void employeeFromAnotherGateCannotIssueTicket() {
+        Gate otherEntryGate = new Gate("Entry-2", GateType.ENTRY);
+        Employee otherGateEmployee = new Employee("Meera", "9000000002", otherEntryGate);
+
+        assertThatThrownBy(() -> service.parkVehicle(car, customer, entryGate, otherGateEmployee))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.parkVehicle(car, customer, entryGate, exitEmployee))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.FREE);
+        assertThatThrownBy(() -> service.findActiveTicket(car.getNumber())).isInstanceOf(TicketNotFoundException.class);
+    }
+
+    @Test
+    void entryGateEmployeeCannotSettleTicket() {
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
+        CountingPayment payment = new CountingPayment();
+
+        assertThatThrownBy(() -> service.exitVehicle(ticket, payment, entryEmployee))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.exitVehicleWithLostTicket(car.getNumber(), payment, entryEmployee))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(payment.calls).isZero();
+        assertThat(ticket.getStatus()).isEqualTo(TicketStatus.ACTIVE);
+        assertThat(ticket.getSettledBy()).isNull();
+        assertThat(carSpot1.getStatus()).isEqualTo(SpotStatus.OCCUPIED);
     }
 
     @Test
@@ -247,7 +296,7 @@ class ParkingServiceTest {
         List<Callable<Ticket>> tasks = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             Vehicle vehicle = new Vehicle("V-" + i, VehicleType.CAR);
-            tasks.add(() -> lot.parkVehicle(vehicle, customer, entryGate));
+            tasks.add(() -> lot.parkVehicle(vehicle, customer, entryGate, entryEmployee));
         }
 
         List<Ticket> tickets = runTogether(tasks);
@@ -262,7 +311,7 @@ class ParkingServiceTest {
     void concurrentEntriesForOneVehicleCreateOneTicketAndHoldOneSpot() throws Exception {
         List<Callable<Ticket>> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
-            tasks.add(() -> service.parkVehicle(car, customer, entryGate));
+            tasks.add(() -> service.parkVehicle(car, customer, entryGate, entryEmployee));
         }
 
         List<Ticket> tickets = runTogether(tasks);
@@ -274,12 +323,12 @@ class ParkingServiceTest {
 
     @Test
     void concurrentExitsChargeCustomerOnce() throws Exception {
-        Ticket ticket = service.parkVehicle(car, customer, entryGate);
+        Ticket ticket = service.parkVehicle(car, customer, entryGate, entryEmployee);
         CountingPayment payment = new CountingPayment();
 
         List<Callable<Boolean>> tasks = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
-            tasks.add(() -> service.exitVehicle(ticket, payment));
+            tasks.add(() -> service.exitVehicle(ticket, payment, exitEmployee));
         }
 
         assertThat(runTogether(tasks)).containsExactly(true);

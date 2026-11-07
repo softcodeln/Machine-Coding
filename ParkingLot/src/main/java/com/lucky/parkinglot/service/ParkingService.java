@@ -4,11 +4,7 @@ import com.lucky.parkinglot.enums.GateType;
 import com.lucky.parkinglot.enums.TicketStatus;
 import com.lucky.parkinglot.exception.ActiveTicketExistsException;
 import com.lucky.parkinglot.exception.TicketNotFoundException;
-import com.lucky.parkinglot.model.Customer;
-import com.lucky.parkinglot.model.Gate;
-import com.lucky.parkinglot.model.Spot;
-import com.lucky.parkinglot.model.Ticket;
-import com.lucky.parkinglot.model.Vehicle;
+import com.lucky.parkinglot.model.*;
 import com.lucky.parkinglot.payment.Payment;
 import com.lucky.parkinglot.repository.SpotRepository;
 import com.lucky.parkinglot.repository.TicketRepository;
@@ -33,9 +29,13 @@ public class ParkingService {
 
     private final Set<Integer> ticketsBeingSettled = ConcurrentHashMap.newKeySet();
 
-    public Ticket parkVehicle(Vehicle vehicle, Customer customer, Gate gate) {
+    public Ticket parkVehicle(Vehicle vehicle, Customer customer, Gate gate, Employee employee) {
         if (gate.getType() != GateType.ENTRY) {
             throw new IllegalArgumentException("Tickets are generated only at an entry gate: " + gate.getName());
+        }
+        if (employee.getGate() != gate) {
+            throw new IllegalArgumentException(
+                    "Employee " + employee.getName() + " does not work at gate " + gate.getName());
         }
         if (ticketRepository.findActiveByVehicleNumber(vehicle.getNumber()).isPresent()) {
             throw activeTicketExists(vehicle);
@@ -45,7 +45,7 @@ public class ParkingService {
         spot.assignVehicle(vehicle);
         spotRepository.save(spot);
 
-        Ticket ticket = new Ticket(LocalDateTime.now(clock), gate, vehicle, customer, spot);
+        Ticket ticket = new Ticket(LocalDateTime.now(clock), gate, vehicle, customer, spot, employee);
         // Another gate may have ticketed this vehicle since the check above; if so, give the spot back.
         if (!ticketRepository.saveIfVehicleHasNoActiveTicket(ticket)) {
             freeSpot(spot);
@@ -54,12 +54,14 @@ public class ParkingService {
         return ticket;
     }
 
-    public boolean exitVehicle(Ticket ticket, Payment payment) {
-        return settle(ticket.getId(), payment, 0);
+    public boolean exitVehicle(Ticket ticket, Payment payment, Employee employee) {
+        checkWorksAtExitGate(employee);
+        return settle(ticket.getId(), payment, 0, employee);
     }
 
-    public boolean exitVehicleWithLostTicket(String vehicleNumber, Payment payment) {
-        return settle(findActiveTicket(vehicleNumber).getId(), payment, lostTicketPenalty);
+    public boolean exitVehicleWithLostTicket(String vehicleNumber, Payment payment, Employee employee) {
+        checkWorksAtExitGate(employee);
+        return settle(findActiveTicket(vehicleNumber).getId(), payment, lostTicketPenalty, employee);
     }
 
     public Ticket findActiveTicket(String vehicleNumber) {
@@ -68,7 +70,7 @@ public class ParkingService {
     }
 
     // Only one settlement per ticket at a time, so a second exit gate cannot charge the customer twice.
-    private boolean settle(Integer ticketId, Payment payment, int penalty) {
+    private boolean settle(Integer ticketId, Payment payment, int penalty, Employee employee) {
         if (!ticketsBeingSettled.add(ticketId)) {
             throw new IllegalStateException("Payment already in progress for ticket: " + ticketId);
         }
@@ -83,12 +85,18 @@ public class ParkingService {
             if (!payment.pay(ticket.getCustomer(), ticket.getAmount())) {
                 return false;
             }
-            ticket.markPaid();
+            ticket.markPaid(employee);
             ticketRepository.save(ticket);
             freeSpot(ticket.getSpot());
             return true;
         } finally {
             ticketsBeingSettled.remove(ticketId);
+        }
+    }
+
+    private void checkWorksAtExitGate(Employee employee) {
+        if (employee.getGate().getType() != GateType.EXIT) {
+            throw new IllegalArgumentException("Only exit-gate employees can settle tickets: " + employee.getName());
         }
     }
 

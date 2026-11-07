@@ -49,9 +49,10 @@ public class ParkingLotDemo {
 
         Gate entryGate = gateRepository.save(new Gate("Entry-1", GateType.ENTRY));
         Gate exitGate = gateRepository.save(new Gate("Exit-1", GateType.EXIT));
-        Employee employee = employeeRepository.save(new Employee("Aashi", "9000000000", entryGate));
+        Employee employeeEntry = employeeRepository.save(new Employee("Aashi", "9000000000", entryGate));
+        Employee employeeExit = employeeRepository.save(new Employee("Rohan", "9000000001", exitGate));
         parkingLotRepository.save(new ParkingLot("City Centre", List.of(ground), List.of(entryGate),
-                List.of(exitGate), List.of(employee)));
+                List.of(exitGate), List.of(employeeEntry, employeeExit)));
 
         ParkingService service = new ParkingService(
                 new NearestSpotAssignment(spotRepository),
@@ -67,28 +68,28 @@ public class ParkingLotDemo {
         Vehicle secondCar = vehicleRepository.save(new Vehicle("KA-01-5678", VehicleType.CAR));
         Vehicle bike = vehicleRepository.save(new Vehicle("KA-02-9999", VehicleType.BIKE));
 
-        Ticket ticket = service.parkVehicle(car, ravi, entryGate);
+        Ticket ticket = service.parkVehicle(car, ravi, entryGate, employeeEntry);
         System.out.printf("Ticket %d: %s parked at %s, spot %s (%s)%n", ticket.getId(), car.getNumber(),
                 ticket.getSpot().getFloor().getName(), ticket.getSpot().getNumber(), ticket.getSpot().getStatus());
 
         try {
-            service.parkVehicle(secondCar, meera, entryGate);
+            service.parkVehicle(secondCar, meera, entryGate, employeeEntry);
         } catch (NoSpotAvailableException e) {
             System.out.println("Second car turned away: " + e.getMessage());
         }
 
         Payment failedPayment = (payer, amount) -> false;
-        boolean paid = service.exitVehicle(ticket, failedPayment);
+        boolean paid = service.exitVehicle(ticket, failedPayment, employeeExit);
         System.out.printf("First payment succeeded: %b, ticket %s, spot %s%n", paid, ticket.getStatus(),
                 ticket.getSpot().getStatus());
 
         Payment upi = new UpiPayment(new RazorpayGatewayAdapter(new RazorpayPaymentGateway()), "IN");
-        paid = service.exitVehicle(ticket, upi);
+        paid = service.exitVehicle(ticket, upi, employeeExit);
         System.out.printf("UPI payment succeeded: %b, amount %d, ticket %s, spot %s%n", paid, ticket.getAmount(),
                 ticket.getStatus(), ticket.getSpot().getStatus());
 
-        service.parkVehicle(bike, ravi, entryGate);
-        paid = service.exitVehicleWithLostTicket(bike.getNumber(), new CashPayment());
+        service.parkVehicle(bike, ravi, entryGate, employeeEntry);
+        paid = service.exitVehicleWithLostTicket(bike.getNumber(), new CashPayment(), employeeExit);
         System.out.printf("Lost-ticket exit by cash succeeded: %b%n", paid);
 
         System.out.printf("Tickets stored: %d, vehicles stored: %d%n", ticketRepository.findAll().size(),

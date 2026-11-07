@@ -3,12 +3,7 @@ package com.lucky.parkinglot.repository;
 import com.lucky.parkinglot.enums.GateType;
 import com.lucky.parkinglot.enums.SpotStatus;
 import com.lucky.parkinglot.enums.VehicleType;
-import com.lucky.parkinglot.model.Customer;
-import com.lucky.parkinglot.model.Floor;
-import com.lucky.parkinglot.model.Gate;
-import com.lucky.parkinglot.model.Spot;
-import com.lucky.parkinglot.model.Ticket;
-import com.lucky.parkinglot.model.Vehicle;
+import com.lucky.parkinglot.model.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -22,6 +17,7 @@ class RepositoryTest {
     private final SpotRepository spotRepository = new SpotRepository();
     private final VehicleRepository vehicleRepository = new VehicleRepository();
     private final TicketRepository ticketRepository = new TicketRepository();
+    private final EmployeeRepository employeeRepository = new EmployeeRepository();
 
     @Test
     void saveAssignsIdOnInsertAndKeepsItOnUpdate() {
@@ -99,7 +95,7 @@ class RepositoryTest {
         assertThat(ticketRepository.saveIfVehicleHasNoActiveTicket(second)).isFalse();
         assertThat(second.getId()).isNull();
 
-        first.markPaid();
+        first.markPaid(first.getIssuedBy());
         ticketRepository.save(first);
 
         assertThat(ticketRepository.findActiveByVehicleNumber("KA-01")).isEmpty();
@@ -107,6 +103,8 @@ class RepositoryTest {
     }
 
     private Ticket newTicket(Vehicle vehicle, Spot spot) {
-        return new Ticket(LocalDateTime.now(), new Gate("Entry-1", GateType.ENTRY), vehicle, new Customer("Ravi"), spot);
+        Gate gate = new Gate("Entry-1", GateType.ENTRY);
+        Employee employee = employeeRepository.save(new Employee("Aashi", "9000000000", gate));
+        return new Ticket(LocalDateTime.now(), gate, vehicle, new Customer("Ravi"), spot, employee);
     }
 }

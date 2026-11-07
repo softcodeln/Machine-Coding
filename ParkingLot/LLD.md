@@ -109,10 +109,10 @@ Parking Lot system with which customer can park their vehicle.
 
 - Customer
 - Ticket
-- Gate - Entry, Exit
+- Gate
 - Employee
 - Spot
-- Vehicle - Bike, Car
+- Vehicle
 - Floor
 - ParkingLot
 - ParkingService
@@ -281,6 +281,8 @@ classDiagram
 - `amount : Integer`
 - `status : TicketStatus`
 - `exitTime : LocalDateTime`
+- `issuedBy : Employee`
+- `settledBy : Employee`
 
 </details>
 
@@ -496,7 +498,7 @@ erDiagram
 |-----|----------|---------|------------|
 | PK  | `id`     | BIGINT  |            |
 |     | `number` | VARCHAR |            |
-|     | `type`   | BIGINT  |            |
+|     | `type`   | TINYINT |            |
 
 Constraint: `UNIQUE(number)`
 
@@ -507,7 +509,7 @@ Constraint: `UNIQUE(number)`
 
 | Key | Column | Type    | References |
 |-----|--------|---------|------------|
-| PK  | `id`   | BIGINT  |            |
+| PK  | `id`   | INT     |            |
 |     | `name` | VARCHAR |            |
 
 </details>
@@ -530,7 +532,7 @@ Constraint: `UNIQUE(number)`
 |-----|------------|---------|--------------|
 | PK  | `id`       | BIGINT  |              |
 |     | `number`   | VARCHAR |              |
-|     | `type`     | INT     |              |
+|     | `type`     | TINYINT |              |
 |     | `status`   | INT     |              |
 | FK  | `floor_id` | BIGINT  | `Floors(id)` |
 
@@ -545,7 +547,7 @@ Constraint: `UNIQUE(floor_id, number)`
 |-----|-----------------|---------|-------------------|
 | PK  | `id`            | BIGINT  |                   |
 |     | `name`          | VARCHAR |                   |
-|     | `gate_type`     | INT     |                   |
+|     | `gate_type`     | TINYINT |                   |
 | FK  | `parkinglot_id` | BIGINT  | `ParkingLots(id)` |
 
 </details>
@@ -572,11 +574,15 @@ Constraint: `UNIQUE(floor_id, number)`
 |     | `entry_time`  | DATETIME |                 |
 |     | `exit_time`   | DATETIME |                 |
 |     | `amount`      | BIGINT   |                 |
-|     | `status`      | BIGINT   |                 |
+|     | `status`      | TINYINT  |                 |
 | FK  | `customer_id` | BIGINT   | `Customers(id)` |
 | FK  | `vehicle_id`  | BIGINT   | `Vehicles(id)`  |
 | FK  | `spot_id`     | BIGINT   | `Spots(id)`     |
 | FK  | `gate_id`     | BIGINT   | `Gates(id)`     |
+| FK  | `issued_by`   | BIGINT   | `Employees(id)` |
+| FK  | `settled_by`  | BIGINT   | `Employees(id)` |
+
+`settled_by` is NULL until the ticket is paid.
 
 </details>
 
