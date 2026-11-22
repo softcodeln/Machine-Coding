@@ -1,0 +1,81 @@
+IMPORTANT POINTS FOR LLD PROBLEM SOLVING
+=========================================
+
+1. Clarify Requirements
+-----------------------
+
+During the requirements-clarification step, identify how the system should
+behave in edge cases. Do not solve those edge cases at this stage.
+
+For each edge case, do one of the following:
+
+- Ask the interviewer or stakeholder for clarification.
+- State a reasonable assumption.
+- Document the expected system behavior.
+
+Example:
+- Edge case: Two people try to book the same seat at the same time.
+- Concurrency expectation: The system must never allow both requests to
+  successfully book the same seat.
+
+Always document important concurrency expectations, including what must never
+happen when multiple requests are processed simultaneously.
+
+
+HOW TO MAKE DESIGN PATTERNS VISIBLE IN AN LLD SOLUTION
+=======================================================
+
+When using a design pattern, make its intent and structure easy to identify.
+Explicitly show the participants, their responsibilities, and how they
+collaborate. Avoid using a pattern only implicitly through class names or
+method calls.
+
+
+1. Creational Design Patterns
+-----------------------------
+
+Add important points here as they are documented.
+
+
+2. Structural Design Patterns
+-----------------------------
+
+A. Facade Design Pattern
+
+- Keep the business logic inside the appropriate subsystem classes.
+- The facade should coordinate the subsystem calls in the required order.
+- Make the facade the single entry point for the client.
+- Do not allow controllers or clients to call subsystem classes directly.
+- Clearly show the client, facade, and subsystems in the class diagram or
+  interaction flow.
+
+
+3. Behavioral Design Patterns
+-----------------------------
+
+A. Observer Design Pattern
+
+To make the Observer pattern visible:
+
+1. Clearly name and identify the following:
+   - Subject
+   - Observer interface
+   - Concrete observers
+   - Notification or publish operation
+
+2. Show two or three concrete observers to demonstrate that observers are
+   interchangeable.
+
+3. Pass an event object to observers instead of passing unrelated primitive
+   arguments. The event object should contain the information observers need,
+   such as:
+   - Entity or event IDs
+   - Event type
+   - Timestamp
+
+Example:
+
+    onMessage(event)
+
+The event object allows each observer to decide how to react to the event
+without tightly coupling the subject to a specific observer implementation.

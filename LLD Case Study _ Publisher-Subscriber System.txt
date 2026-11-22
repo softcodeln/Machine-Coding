@@ -1,0 +1,204 @@
+LLD Case Study : Publisher-Subscriber System
+
+1. Understanding Problem Statement
+2. Requirement Gathering
+3. Clarify requirements
+4. Class Diagram + Relationship b/w Entities + Design Patterns
+5. Schema Desgin + Attributes (PK + FK + attrib) + Cardinalities
+
+Step-1: Understanding Problem Statement
+Publisher and Subscriber System => Design a message broker where publishers publish messages to topics and subscribers subscribe to topics. Every subscriber of a topic receives every message in order, and tracks its own read position (offset).
+
+Step-2: Requirement Gathering
+1. Publisher can send message
+2. Subscriber can read message.
+3. Subscriber and Publisher have indirectly many-to-many relation.
+4. Publisher and Subscriber will be loosely coupled.
+5. Subscriber can subscribe/unsubscribe to a Topic through the Broker; publishers stay unaware of subscribers.
+6. Message read by Subscriber is near real-time.
+7. Publisher can register and unregister themself to topic present on Broker.
+
+Step-3: Clarify Requirements // In Clarify Requirements Step, you ask how the system should behave in edge cases.You don't solve them there. {State your assumption, and write down the expected behaviour}
+1. At-least-once delivery
+2. Order within topic guranted & not across Publisher
+
+Step-4: Class Diagram + Relationship b/w Entities + Design Patterns
+
+****Class-Diagram****
+
+class Topic {
+	-String id
+	-String name
+	-List<Message> messages
+	-long latestOffset = -1
+}
+
+class Broker {
+	attributes:
+	-String id
+	-String name
+	-Map<String, Map<String, Subscription>> subscriptions; // topicId -> subscriberId -> Subscription
+	-Map<String, Set<Publisher>> topicPublisher //key = topic_id, Topic Wise Publisher
+	-Map<String, Topic> topics
+
+	methods:
+	addSubscriber(topicId, subscriber)
+	removeSubscriber(topicId, subscriber)
+	read(topicId, subscriber)
+	write(topicId, payload, publisher)
+}
+
+class Publisher {
+	attributes:
+	-String id
+	-String name
+	-Broker broker
+
+	methods:
+	send(topicId, payload)
+}
+
+interface MessageListenser {
+	+onMessage(String mesaage);
+}
+class Subscriber implements MessageListenser{
+	attributes:
+	-String id
+	-String name
+	-Broker broker
+
+	methods:
+	read(topicId)
+	subscribe(topicId)
+	unsubscribe(topicId)
+	onMessage(String mesaage) // Broker calls this message.
+}
+
+class Subscription {
+	-Topic topic
+	-MessageListenser subscriber
+	-long lastCommittedOffset = -1
+}
+
+class Message {
+	-String id
+	-String payload
+	-Topic topic
+	-long offset
+}
+
+****Relationship-b/w-Entities****
+Topic - Broker = M:1
+Subscription - Broker = M:1
+Publisher - Broker = M:1
+Subscriber - Broker = M:1
+Message - Topic = M:1
+Topic - Subscriber = M:M
+Topic - Publisher = M:M
+Subscription - Topic = M:1
+Subscription - Subscriber = M:1
+
+****Design-Patterns****
+Observer Design Pattern and Facade Desing Pattern
+Broker is the Facade and Observer subject
+Subscriber is the Observer
+
+Step-5: Schema Design + Attributes (PK + FK + attrib) + Cardinalities
+
+****Cardinalities****
+topics - brokers = M:1
+publishers - brokers = M:1
+subscribers - brokers = M:1
+messages - topics = M:1
+topics - subscribers = M:M
+topics - publishers = M:M
+topic_subscription - subscribers = M:1
+topic_subscription - topics = M:1
+
+****Schema Desgin + Attributes (PK + FK + attrib) ****
+
+topics(	id String PK,
+		String name,
+		latestOffset long,
+		broker_id String FK -> broker(id)
+	)
+
+brokers(	id String PK,
+		String name
+		)
+
+publishers(id String PK,
+			String name,
+			broker_id String  FK -> broker(id)
+		)
+
+subscribers(	id String PK,
+			String name,
+			broker_id String FK -> broker(id)
+		)
+
+messages( id String PK,
+		String payload,
+		offset long,
+		String topic_id FK -> topic(id)
+	)
+
+topic_publisher(	topic_id String FK -> topic(id),
+					publisher_id String FK -> publisher(id),
+					Primary key{ topic_id, publisher_id }
+				)
+
+topic_subscription(	topic_id String FK -> topic(id),
+					subscriber_id String FK -> subscriber(id),
+					last_committed_offset long,
+					Primary Key{ topic_id, subscriber_id }
+				)
+
+Step-6: API Design
+
+1. create topic
+2. create Publisher
+3. remove Publihser
+4. register Publisher
+5. unregister Publisher
+6. create Subscriber
+7. remove Subscriber
+8. subscribe publisher
+9. unsubscribe publisher
+10.Publisher send message
+11.Subscriber read message
+
+1.create topic
+POST /v1/topics
+
+2.create publisher
+POST /v1/publishers
+
+3. remove publisher
+DELETE /v1/publishers/{publisherId}
+
+4. regsiter publishers
+POST /v1/topics/{topicId}/publishers
+
+5. unregister publisher
+DELETE /v1/topics/{topicId}/publishers/{publisherId}
+
+6. create Subscriber
+POST /v1/subscribers
+
+7. remove Subscriber
+DELETE /v1/subscribers/{subscriberId}
+
+8. subscribe to a topic
+POST /v1/topics/{topicId}/subscriptions
+
+9. unsubscribe to a topic
+DELETE /v1/topics/{topicId}/subscriptions/{subscriberId}
+
+10. publisher send message
+POST /v1/topics/{topicId}/messages
+
+11. subscriber read message
+GET /v1/topics/{topicId}/subscriptions/{subscriberId}/messages
+
+
