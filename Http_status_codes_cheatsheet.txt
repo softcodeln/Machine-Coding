@@ -1,0 +1,146 @@
+================================================================================
+                HTTP STATUS CODES - CHEAT SHEET FOR HLD / LLD INTERVIEWS
+================================================================================
+
+FIRST DIGIT = WHO IS RESPONSIBLE
+--------------------------------------------------------------------------------
+| Range | Meaning      | Who's at fault            | Memory trick              |
+|-------|--------------|---------------------------|---------------------------|
+| 2xx   | Success      | Nobody                    | "All good"                |
+| 3xx   | Redirection  | Nobody                    | "Go somewhere else"       |
+| 4xx   | Client error | The CALLER sent bad input | "YOU messed up"           |
+| 5xx   | Server error | OUR system failed         | "WE messed up"            |
+--------------------------------------------------------------------------------
+
+
+2xx - SUCCESS
+-----------------------------------------------------------------------------------------
+| Code | Name        | When to use                         | Example                    |
+|------|-------------|-------------------------------------|----------------------------|
+| 200  | OK          | Successful read/update, with data   | GET /v1/feed               |
+| 201  | Created     | New resource created                | POST /v1/posts             |
+| 202  | Accepted    | Accepted, processed later (async)   | Video queued for processing|
+| 204  | No Content  | Success, nothing to return          | DELETE /v1/posts/{id}      |
+--------------------------------------------------------------------------------
+
+
+3xx - REDIRECTION (rare in API design)
+--------------------------------------------------------------------------------
+| Code | Name              | When to use                                       |
+|------|-------------------|---------------------------------------------------|
+| 301  | Moved Permanently | URL changed forever (URL shortener, cacheable)    |
+| 302  | Found             | Temporary redirect (count every click)            |
+| 304  | Not Modified      | Client's cached copy still valid (ETag)           |
+--------------------------------------------------------------------------------
+
+
+4xx - CLIENT ERRORS
+-------------------------------------------------------------------------------------------------
+| Code | Name                   | When to use                    | Example                      |
+|------|------------------------|--------------------------------|------------------------------|
+| 400  | Bad Request            | Malformed / invalid input      | Missing field, invalid JSON  |
+| 401  | Unauthorized           | Not logged in / bad token      | No Authorization header      |
+| 403  | Forbidden              | Logged in but NOT allowed      | Normal user calls admin API  |
+| 404  | Not Found              | Resource doesn't exist         | GET /v1/posts/999            |
+| 405  | Method Not Allowed     | Wrong HTTP method              | DELETE on read-only endpoint |
+| 409  | Conflict               | Conflicts with current state   | Username taken, double-book  |
+| 410  | Gone                   | Existed, permanently removed   | Expired short URL            |
+| 413  | Payload Too Large      | Request body too big           | Uploading 2 GB file          |
+| 415  | Unsupported Media Type | Wrong content format           | XML sent to JSON-only API    |
+| 422  | Unprocessable Entity   | Valid format, breaks a rule    | Transfer exceeds balance     |
+| 429  | Too Many Requests      | Rate limit exceeded            | >100 requests/min per user   |
+------------------------------------------------------------------------------------------------
+
+
+5xx - SERVER ERRORS
+--------------------------------------------------------------------------------------------------
+| Code | Name                  | When to use                       | Example                     |
+|------|-----------------------|-----------------------------------|-----------------------------|
+| 500  | Internal Server Error | Unexpected bug/crash in OUR code  | NullPointerException        |
+| 502  | Bad Gateway           | LB/gateway got INVALID response   | Backend crashed mid-response|
+| 503  | Service Unavailable   | Overloaded / maintenance (temp)   | Circuit breaker open        |
+| 504  | Gateway Timeout       | LB/gateway waited TOO LONG        | Payment provider too slow   |
+-------------------------------------------------------------------------------------------------
+
+
+CONFUSING PAIRS (interviewers love these)
+---------------------------------------------------------------------------------
+| Pair           | Difference                                                   |
+|----------------|--------------------------------------------------------------|
+| 401 vs 403     | 401 = "Who are you?" (not authenticated)                     |
+|                | 403 = "I know you, but you can't do this" (not authorized)   |
+|----------------|--------------------------------------------------------------|
+| 400 vs 422     | 400 = request itself broken (bad JSON, missing field, type)  |
+|                | 422 = well-formed, but fails a business rule                 |
+|----------------|--------------------------------------------------------------|
+| 404 vs 410     | 404 = doesn't exist / never did                              |
+|                | 410 = existed, permanently gone                              |
+|----------------|--------------------------------------------------------------|
+| 409 vs 422     | 409 = conflicts with CURRENT STATE (duplicate, in progress)  |
+|                | 422 = request content invalid by business rules              |
+|----------------|--------------------------------------------------------------|
+| 500/502/       | 500 = our code crashed                                       |
+| 503/504        | 502 = upstream returned garbage / connection broke           |
+|                | 503 = deliberately refusing: overloaded or maintenance       |
+|                | 504 = upstream too slow (timeout)                            |
+---------------------------------------------------------------------------------
+
+
+SCENARIO -> CODE QUICK LOOKUP
+-----------------------------------------------------------------------------
+| Scenario                                                      | Code      |
+|---------------------------------------------------------------|-----------|
+| Post created successfully                                     | 201       |
+| Feed fetched                                                  | 200       |
+| Post deleted                                                  | 204       |
+| Video uploaded, processing in background                      | 202       |
+| Missing required field in body                                | 400       |
+| Token expired                                                 | 401       |
+| User deletes someone else's post                              | 403       |
+| Post ID doesn't exist                                         | 404       |
+| Parking lot full / no seats left                              | 409 / 422 |
+| Same idempotency key, request still processing                | 409       |
+| Same idempotency key, different body                          | 422       |
+| User exceeds rate limit                                       | 429       |
+| Unhandled exception in our service                            | 500       |
+| Database or backend service down                              | 503       |
+| Payment gateway took too long                                 | 504       |
+| Load balancer can't get valid response from app               | 502       |
+-----------------------------------------------------------------------------
+
+
+SHOULD THE CLIENT RETRY?
+----------------------------------------------------------------------------------------
+| Retry?               | Codes                          | Why                          |
+|----------------------|--------------------------------|------------------------------|
+| YES (exp. backoff)   | 429, 502, 503, 504             | Temporary problems           |
+| MAYBE (few times)    | 500                            | Sometimes transient          |
+| NO                   | 400, 401, 403, 404, 409, 422   | Same bad request fails again |
+----------------------------------------------------------------------------------------
+Notes:
+ - For 429 and 503, send a "Retry-After" header (how long to wait).
+ - Retrying writes is safe only if they are IDEMPOTENT (use idempotency keys).
+
+
+STANDARD ERROR BODY FORMAT
+--------------------------------------------------------------------------------
+{
+  "error": {
+    "code": "PARKING_LOT_FULL",
+    "message": "No parking spot available for vehicle type CAR",
+    "requestId": "a1b2c3d4"
+  }
+}
+ - code      : machine-readable, client can act on it
+ - message   : human-readable
+ - requestId : for tracing logs
+
+
+INTERVIEW ONE-LINER
+--------------------------------------------------------------------------------
+"Create returns 201, reads 200, deletes 204. Validation errors are 400,
+missing/expired token 401, no permission 403, not found 404, conflicts 409,
+rate limit 429 with Retry-After. Our bugs are 500; unavailable or slow
+downstream services give 503/504 at the gateway. Clients retry 429 and 5xx
+with exponential backoff, which is safe because our writes are idempotent."
+================================================================================
