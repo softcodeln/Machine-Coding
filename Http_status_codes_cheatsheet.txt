@@ -21,7 +21,7 @@ FIRST DIGIT = WHO IS RESPONSIBLE
 | 201  | Created     | New resource created                | POST /v1/posts             |
 | 202  | Accepted    | Accepted, processed later (async)   | Video queued for processing|
 | 204  | No Content  | Success, nothing to return          | DELETE /v1/posts/{id}      |
---------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 
 
 3xx - REDIRECTION (rare in API design)
